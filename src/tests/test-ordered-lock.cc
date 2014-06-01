@@ -50,9 +50,9 @@ TEST(OrderedLock, Ctors)
 {
     ordered_lock<mock_mutex, mock_mutex> lock1;
 
-//    not lockable - should not be compiled
-//    ordered_lock<mock_mutex, std::string> lock2;
-//    ordered_lock<float, mock_mutex> lock3;
+// not lockable - should not be compiled
+// ordered_lock<mock_mutex, std::string> lock2;
+// ordered_lock<float, mock_mutex> lock3;
 
     EXPECT_FALSE(lock1.owns_lock());
     EXPECT_FALSE(!!lock1);

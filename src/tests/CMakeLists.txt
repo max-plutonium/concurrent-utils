@@ -31,11 +31,16 @@ cmake_minimum_required(VERSION 3.0)
 include_directories(SYSTEM ../googletest/googletest/include)
 include_directories(SYSTEM ../googletest/googlemock/include)
 
+set(HEADERS
+        mock-types.h
+)
+
 set(SOURCES
+    test-concurrent-queue.cc
     test-ordered-lock.cc
 )
 
-add_executable(${PROJECT_NAME} ${SOURCES})
+add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES})
 target_link_libraries(${PROJECT_NAME} gmock_main)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "-debug")

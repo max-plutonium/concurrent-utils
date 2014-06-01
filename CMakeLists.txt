@@ -28,6 +28,8 @@
 project(concurrent-helper)
 cmake_minimum_required(VERSION 3.0)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+
 add_subdirectory(src/concurrent-helper)
 add_subdirectory(src/googletest/googlemock)
 add_subdirectory(src/tests)

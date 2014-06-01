@@ -32,6 +32,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} \
     -fvisibility=hidden -fvisibility-inlines-hidden")
 
 set(HEADERS
+    concurrent-queue.h
+    concurrent-queue.tt
     locks.h
 )
 
