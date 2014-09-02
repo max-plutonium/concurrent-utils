@@ -25,19 +25,19 @@
 # sale, use or other dealings in this Software without prior written
 # authorization.
 #
-project(concurrent-helper-tests)
+project(concurrent-utils-tests)
 cmake_minimum_required(VERSION 3.0)
 
 include_directories(SYSTEM ../googletest/googletest/include)
 include_directories(SYSTEM ../googletest/googlemock/include)
 
 set(HEADERS
-        mock-types.h
+    mock-types.h
 )
 
 set(SOURCES
-    test-concurrent-queue.cc
     test-ordered-lock.cc
+    test-concurrent-queue.cc
 )
 
 add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES})

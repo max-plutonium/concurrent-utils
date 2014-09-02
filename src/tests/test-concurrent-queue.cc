@@ -28,10 +28,10 @@
 #include <gtest/gtest.h>
 #include <mutex>
 
-#include "../concurrent-helper/concurrent-queue.h"
+#include "../concurrent-utils/concurrent-queue.h"
 #include "mock-types.h"
 
-using namespace concurrent_helper;
+using namespace concurrent_utils;
 
 TEST(ConcurrentQueue, CtorAndDtor)
 {

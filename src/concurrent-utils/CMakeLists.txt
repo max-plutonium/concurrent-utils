@@ -25,7 +25,7 @@
 # sale, use or other dealings in this Software without prior written
 # authorization.
 #
-project(concurrent-helper)
+project(concurrent-utils)
 cmake_minimum_required(VERSION 3.0)
 
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} \
@@ -37,4 +37,4 @@ set(HEADERS
     locks.h
 )
 
-install(FILES ${HEADERS} DESTINATION concurrent-helper)
+install(FILES ${HEADERS} DESTINATION concurrent-utils)

@@ -25,11 +25,11 @@
 # sale, use or other dealings in this Software without prior written
 # authorization.
 #
-project(concurrent-helper)
+project(concurrent-utils)
 cmake_minimum_required(VERSION 3.0)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
-add_subdirectory(src/concurrent-helper)
+add_subdirectory(src/concurrent-utils)
 add_subdirectory(src/googletest/googlemock)
 add_subdirectory(src/tests)

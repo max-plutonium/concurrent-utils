@@ -25,15 +25,15 @@
  * sale, use or other dealings in this Software without prior written
  * authorization.
  */
-#ifndef CONCURRENT_QUEUE_H
-#define CONCURRENT_QUEUE_H
+#ifndef CONCURRENT_UTILS_CONCURRENT_QUEUE_H
+#define CONCURRENT_UTILS_CONCURRENT_QUEUE_H
 
 #include <memory>
 #include <type_traits>
 
 #include "locks.h"
 
-namespace concurrent_helper {
+namespace concurrent_utils {
 
 namespace detail {
 
@@ -60,7 +60,7 @@ namespace detail {
         {
             node  *next = nullptr, *last = nullptr;
 
-            queue_impl() : node_alloc_type() {}
+            queue_impl() : node_alloc_type() { }
             queue_impl(const node_alloc_type &a) : node_alloc_type(a) { }
             queue_impl(node_alloc_type &&a) : node_alloc_type(std::move(a)) { }
 
@@ -213,8 +213,8 @@ public:
 
 }; // class concurrent_queue
 
-} // namespace concurrent_helper
+} // namespace concurrent_utils
 
 #include "concurrent-queue.tt"
 
-#endif // CONCURRENT_QUEUE_H
+#endif // CONCURRENT_UTILS_CONCURRENT_QUEUE_H

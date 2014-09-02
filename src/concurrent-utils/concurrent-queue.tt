@@ -27,7 +27,7 @@
  */
 #include "concurrent-queue.h"
 
-namespace concurrent_helper {
+namespace concurrent_utils {
 
 /**
  * @internal
@@ -319,4 +319,4 @@ namespace concurrent_helper {
         return false;
     }
 
-} // namespace concurrent_helper
+} // namespace concurrent_utils

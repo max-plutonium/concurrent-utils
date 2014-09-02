@@ -25,8 +25,8 @@
  * sale, use or other dealings in this Software without prior written
  * authorization.
  */
-#ifndef MOCK_TYPES_H
-#define MOCK_TYPES_H
+#ifndef CONCURRENT_UTILS_MOCK_TYPES_H
+#define CONCURRENT_UTILS_MOCK_TYPES_H
 
 #include <cstdint>
 #include <gmock/gmock.h>
@@ -153,4 +153,4 @@ public:
     MOCK_METHOD0(unlock, void());
 };
 
-#endif // MOCK_TYPES_H
+#endif // CONCURRENT_UTILS_MOCK_TYPES_H

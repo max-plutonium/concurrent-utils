@@ -25,12 +25,12 @@
  * sale, use or other dealings in this Software without prior written
  * authorization.
  */
-#ifndef LOCKS_H
-#define LOCKS_H
+#ifndef CONCURRENT_UTILS_LOCKS_H
+#define CONCURRENT_UTILS_LOCKS_H
 
 #include <mutex>
 
-namespace concurrent_helper {
+namespace concurrent_utils {
 
 template <typename Tp> class is_lockable
 {
@@ -168,6 +168,6 @@ public:
 
 }; // class ordered_lock
 
-} // namespace concurrent-helper
+} // namespace concurrent_utils
 
-#endif // LOCKS_H
+#endif // CONCURRENT_UTILS_LOCKS_H

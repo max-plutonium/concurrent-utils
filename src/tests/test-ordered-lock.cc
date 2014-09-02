@@ -27,11 +27,11 @@
  */
 #include <gmock/gmock.h>
 
-#include "../concurrent-helper/locks.h"
+#include "../concurrent-utils/locks.h"
 
 using testing::InSequence;
 
-using namespace concurrent_helper;
+using namespace concurrent_utils;
 
 class mock_mutex
 {
