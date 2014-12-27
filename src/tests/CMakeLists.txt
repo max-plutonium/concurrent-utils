@@ -32,16 +32,18 @@ include_directories(SYSTEM ../googletest/googletest/include)
 include_directories(SYSTEM ../googletest/googlemock/include)
 
 set(HEADERS
+    benchmark.h
     mock-types.h
 )
 
 set(SOURCES
+    benchmark.cc
     test-ordered-lock.cc
     test-concurrent-queue.cc
 )
 
 add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES})
-target_link_libraries(${PROJECT_NAME} gmock_main)
+target_link_libraries(${PROJECT_NAME} gmock_main gomp)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "-debug")
 
