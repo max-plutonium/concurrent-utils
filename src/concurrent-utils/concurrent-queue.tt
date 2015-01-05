@@ -57,10 +57,10 @@ namespace concurrent_utils {
     details::basic_forward_queue<Tp, Alloc>::
     _hook(node *p) noexcept
     {
-        if(!_impl.last)
-            _impl.next = p;
-        else
+        if(_impl.last)
             _impl.last->next = p;
+        else
+            _impl.next = p;
         _impl.last = p;
     }
 
@@ -108,9 +108,9 @@ namespace concurrent_utils {
     _assign(concurrent_queue<Tp2, Lock2, Alloc2> const &other)
     {
         static_assert(std::is_constructible<Tp, Tp2>::value,
-                "template argument substituting Tp in second"
+                "template argument substituting Tp in the second"
            " queue object declaration must be constructible from"
-                     " Tp in first queue object declaration");
+                     " Tp in the first queue object declaration");
 
         // temp's destructor should be executed after all unlocks
         concurrent_queue<Tp, Lock, Alloc> temp;
@@ -124,8 +124,7 @@ namespace concurrent_utils {
         {
             // might throw
             typename _base::scoped_node_ptr
-                node_ptr = temp._create_node(
-                    nullptr, std::ref(other_node_ptr->t));
+                node_ptr = temp._create_node(nullptr, std::ref(other_node_ptr->t));
             temp._hook(node_ptr.release());
         }
 
@@ -134,8 +133,66 @@ namespace concurrent_utils {
         locker.release();
         other._lock.unlock();
 
-        // swap contents with temp object
+        // swap contents with the temp object
         swap_unsafe(temp);
+    }
+
+/**
+ * @internal
+ * @brief Appends contents of @a other to itself by moving
+ * nodes using a simple exchange of pointers
+ */
+  template <typename Tp, typename Lock, typename Alloc>
+    void
+    concurrent_queue<Tp, Lock, Alloc>::
+    _append(concurrent_queue<Tp, Lock, Alloc> &&other)
+    {
+        // to protect deadlocks
+        ordered_lock<Lock, Lock> locker { _lock, other._lock };
+        if(this->_impl.last)
+            this->_impl.last->next = other._impl.next;
+        else
+            this->_impl.next = other._impl.next;
+        this->_impl.last = other._impl.last;
+        other._impl.next = other._impl.last = nullptr;
+    }
+
+/**
+ * @internal
+ * @brief Appends contents of @a other to itself by copying nodes
+ * @note The original queue is still in initial state.
+ */
+  template <typename Tp, typename Lock, typename Alloc>
+      template<typename Tp2, typename Lock2, typename Alloc2>
+    void
+    concurrent_queue<Tp, Lock, Alloc>::
+    _append(concurrent_queue<Tp2, Lock2, Alloc2> const &other)
+    {
+        static_assert(std::is_constructible<Tp, Tp2>::value,
+                "template argument substituting Tp in the second"
+           " queue object declaration must be constructible from"
+                    " Tp in the first queue object declaration");
+
+        // temp's destructor should be executed after all unlocks
+        concurrent_queue<Tp, Lock, Alloc> temp;
+
+        // to protect deadlocks
+        ordered_lock<Lock, Lock2> locker { _lock, other._lock };
+
+        for(auto *other_node_ptr = other._impl.next;
+            other_node_ptr;
+            other_node_ptr = other_node_ptr->next)
+        {
+            // might throw
+            typename _base::scoped_node_ptr
+                node_ptr = temp._create_node(nullptr, std::ref(other_node_ptr->t));
+            temp._hook(node_ptr.release());
+        }
+
+        locker.unlock();
+
+        // move contents from the temp object
+        _append(std::move(temp));
     }
 
 /**
@@ -206,6 +263,30 @@ namespace concurrent_utils {
     operator=(concurrent_queue<Tp2, Lock2, Alloc2> const &other)
     {
         _assign(other); return *this;
+    }
+
+/**
+ * @brief Appends contents of @a other to itself by moving items
+ */
+  template <typename Tp, typename Lock, typename Alloc>
+    concurrent_queue<Tp, Lock, Alloc> &
+    concurrent_queue<Tp, Lock, Alloc>::
+    append(concurrent_queue<Tp, Lock, Alloc> &&other)
+    {
+        _append(std::move(other)); return *this;
+    }
+
+/**
+ * @brief Appends contents of @a other to itself by copying items
+ * @note The original queue is still in initial state.
+ */
+  template <typename Tp, typename Lock, typename Alloc>
+      template <typename Tp2, typename Lock2, typename Alloc2>
+    concurrent_queue<Tp, Lock, Alloc> &
+    concurrent_queue<Tp, Lock, Alloc>::
+    append(concurrent_queue<Tp2, Lock2, Alloc2> const &other)
+    {
+        _append(other); return *this;
     }
 
 /**
