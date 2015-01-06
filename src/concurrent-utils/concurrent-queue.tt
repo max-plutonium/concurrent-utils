@@ -319,6 +319,7 @@ namespace concurrent_utils {
 /**
  * @brief Creates an item from given arguments and puts it to the queue
  * @return true, if successful.
+ * @snippet concurrent-queue.cc enqueue
  */
   template <typename Tp, typename Lock, typename Alloc>
       template<typename... Args>
@@ -341,6 +342,7 @@ namespace concurrent_utils {
  * @brief Takes the next item from the queue and forwards
  * it by reference @a val if the queue is not empty
  * @return false, if the queue is already empty; true otherwise.
+ * @snippet concurrent-queue.cc dequeue
  */
   template <typename Tp, typename Lock, typename Alloc>
     bool
