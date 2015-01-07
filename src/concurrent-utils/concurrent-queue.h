@@ -130,7 +130,8 @@ class concurrent_queue : protected details::basic_forward_queue<Tp, Alloc>
   template <typename Tp2, typename Lock2, typename Alloc2>
     void _assign(concurrent_queue<Tp2, Lock2, Alloc2> const&);
 
-    void _append(concurrent_queue&&);
+  template <typename Lock2>
+    void _append(concurrent_queue<Tp, Lock2, Alloc> &&);
 
     // We can append queues with any compatible types
   template <typename Tp2, typename Lock2, typename Alloc2>
@@ -153,17 +154,19 @@ public:
 
     // To allow construction and assignment from any compatible types
 
-    /// \copydoc concurrent_queue(const concurrent_queue &other)
+    /// @copydoc concurrent_queue(const concurrent_queue &other)
   template <typename Tp2, typename Lock2, typename Alloc2>
     concurrent_queue(concurrent_queue<Tp2, Lock2, Alloc2> const&);
 
-    /// \copydoc concurrent_queue::operator=(const concurrent_queue &other)
+    /// @copydoc concurrent_queue::operator=(const concurrent_queue &other)
   template <typename Tp2, typename Lock2, typename Alloc2>
     concurrent_queue &operator=(concurrent_queue<Tp2, Lock2, Alloc2> const&);
 
-    concurrent_queue &append(concurrent_queue&&);
+    /// @brief Appends contents of @a other to itself by moving items
+  template <typename Lock2>
+    concurrent_queue &append(concurrent_queue<Tp, Lock2, Alloc> &&other);
 
-    /// \copydoc append
+    /// @copydoc append
   template <typename Tp2, typename Lock2, typename Alloc2>
     concurrent_queue &append(concurrent_queue<Tp2, Lock2, Alloc2> const&);
 
@@ -175,12 +178,12 @@ public:
     concurrent_queue &operator=(concurrent_queue &&other) noexcept
     { concurrent_queue(std::move(other)).swap(*this); return *this; }
 
-    /// \copydoc concurrent_queue(concurrent_queue &&other)
+    /// @copydoc concurrent_queue(concurrent_queue &&other)
   template <typename Lock2>
     concurrent_queue(concurrent_queue<Tp, Lock2, Alloc> &&other) noexcept
         : concurrent_queue() { swap(other); }
 
-    /// \copydoc operator=(concurrent_queue &&other)
+    /// @copydoc operator=(concurrent_queue &&other)
   template <typename Lock2>
     concurrent_queue &operator=(concurrent_queue<Tp, Lock2, Alloc> &&other) noexcept
     { concurrent_queue(std::move(other)).swap(*this); return *this; }
@@ -212,12 +215,12 @@ public:
 
     inline bool dequeue(value_type &val);
 
-    /// \copydoc enqueue
+    /// @copydoc enqueue
   template <typename... Args>
     inline bool push(Args&&... args)
     { return enqueue(std::forward<Args>(args)...); }
 
-    /// \copydoc dequeue
+    /// @copydoc dequeue
     inline bool pop(value_type &val)
     { return dequeue(val); }
 
@@ -226,12 +229,12 @@ public:
 
     inline bool dequeue_unsafe(value_type &val);
 
-    /// \copydoc enqueue_unsafe
+    /// @copydoc enqueue_unsafe
   template <typename... Args>
     inline bool push_unsafe(Args&&... args)
     { return enqueue_unsafe(std::forward<Args>(args)...); }
 
-    /// \copydoc dequeue_unsafe
+    /// @copydoc dequeue_unsafe
     inline bool pop_unsafe(value_type &val)
     { return dequeue_unsafe(val); }
 

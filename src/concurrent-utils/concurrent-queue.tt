@@ -50,7 +50,7 @@ namespace concurrent_utils {
 
 /**
  * @internal
- * Puts the given node @a p to end of queue
+ * @brief Puts the given node @a p to end of queue
  */
   template <typename Tp, typename Alloc>
     void
@@ -143,12 +143,13 @@ namespace concurrent_utils {
  * nodes using a simple exchange of pointers
  */
   template <typename Tp, typename Lock, typename Alloc>
+      template <typename Lock2>
     void
     concurrent_queue<Tp, Lock, Alloc>::
-    _append(concurrent_queue<Tp, Lock, Alloc> &&other)
+    _append(concurrent_queue<Tp, Lock2, Alloc> &&other)
     {
         // to protect deadlocks
-        ordered_lock<Lock, Lock> locker { _lock, other._lock };
+        ordered_lock<Lock, Lock2> locker { _lock, other._lock };
         if(this->_impl.last)
             this->_impl.last->next = other._impl.next;
         else
@@ -269,9 +270,10 @@ namespace concurrent_utils {
  * @brief Appends contents of @a other to itself by moving items
  */
   template <typename Tp, typename Lock, typename Alloc>
+      template <typename Lock2>
     concurrent_queue<Tp, Lock, Alloc> &
     concurrent_queue<Tp, Lock, Alloc>::
-    append(concurrent_queue<Tp, Lock, Alloc> &&other)
+    append(concurrent_queue<Tp, Lock2, Alloc> &&other)
     {
         _append(std::move(other)); return *this;
     }
