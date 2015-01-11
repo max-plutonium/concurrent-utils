@@ -32,6 +32,9 @@
 
 namespace concurrent_utils {
 
+/*!
+ * \internal
+ */
 template <typename Tp> class is_lockable
 {
   template <typename Up>
@@ -47,13 +50,28 @@ public:
 };
 
 
+/**
+ * @brief Class for ordered locks acquisition
+ *
+ * Some algorithms need to acquire just two locks that can
+ * lead to a hang when two or more threads wait for each other.
+ * ordered_lock acquires locks sequentially according to their
+ * addresses, ie when called from different threads will
+ * still acquire the lock in same manner.
+ *
+ * Common application - in copy or move constructors
+ * in the classes containing the lock.
+ */
 template <typename Lockable1, typename Lockable2>
 class ordered_lock
 {
+#ifndef DOXYGEN
     static_assert(is_lockable<Lockable1>::value
                   && is_lockable<Lockable2>::value,
         "ordered_lock only works with lockable types");
-    std::pair<Lockable1*, Lockable2*> locks;
+#endif
+
+    std::pair<Lockable1 *, Lockable2 *> locks;
     bool locked;
 
     ordered_lock(Lockable1 &l1, Lockable2 &l2, bool is_locked) noexcept
@@ -61,18 +79,42 @@ class ordered_lock
         , locked(is_locked) { }
 
 public:
+    /*!
+     * \brief Конструирует пустой объект
+     */
     constexpr ordered_lock() noexcept
         : locks(nullptr, nullptr), locked(false) { }
 
+    /*!
+     * \brief Конструирует объект и захватывает блокировки
+     */
     ordered_lock(Lockable1 &l1, Lockable2 &l2)
         : ordered_lock(l1, l2, false) { lock(); }
 
+    /*!
+     * \brief Конструирует объект без захвата блокировок
+     *
+     * Необходим для того, чтобы захватить блокировки позже.
+     *
+     * \sa lock()
+     */
     ordered_lock(Lockable1 &l1, Lockable2 &l2, std::defer_lock_t)
         noexcept : ordered_lock(l1, l2, false) { }
 
+    /*!
+     * \brief Конструирует объект без захвата блокировок
+     *
+     * Необходим для того, чтобы сконструировать объект из
+     * уже захваченных блокировок.
+     *
+     * \sa unlock()
+     */
     ordered_lock(Lockable1 &l1, Lockable2 &l2, std::adopt_lock_t)
         noexcept : ordered_lock(l1, l2, true) { }
 
+    /*!
+     * \brief Освобождает блокировки, если они были захвачены
+     */
     ~ordered_lock()
     {
         if(locked)
@@ -82,15 +124,23 @@ public:
     ordered_lock(const ordered_lock&) = delete;
     ordered_lock &operator=(const ordered_lock&) = delete;
 
+    /*!
+     * \brief Конструирует объект из другого объекта перемещением
+     */
     ordered_lock(ordered_lock &&other) noexcept
         : ordered_lock() { swap(other); }
 
-    ordered_lock &operator=(ordered_lock &&other) noexcept
-    {
+    /*!
+     * \brief Присваивает себе блокировки из \a other
+     */
+    ordered_lock &operator=(ordered_lock &&other) noexcept {
         ordered_lock(std::move(other)).swap(*this);
         return *this;
     }
 
+    /*!
+     * \brief Захватывает блокировки
+     */
     void lock()
     {
         using namespace std;
@@ -119,6 +169,9 @@ public:
         locked = true;
     }
 
+    /*!
+     * \brief Освобождает блокировки
+     */
     void unlock()
     {
         using namespace std;
@@ -147,22 +200,36 @@ public:
         locked = false;
     }
 
-    std::pair<Lockable1*, Lockable2*> release() noexcept
+    /*!
+     * \brief Отдает блокировки без освобождения
+     *
+     * \return Пару из хранящихся адресов блокировок.
+     */
+    std::pair<Lockable1 *, Lockable2 *> release() noexcept
     {
         std::pair<Lockable1*, Lockable2*> ret;
         std::swap(ret, locks);
         return ret;
     }
 
+    /*!
+     * \brief Обменивает блокировки с \a other
+     */
     void swap(ordered_lock &other) noexcept
     {
         std::swap(locks, other.locks);
         std::swap(locked, other.locked);
     }
 
+    /*!
+     * \brief Возвращает true, если блокировки захвачены
+     */
     bool owns_lock() const noexcept
     { return locked; }
 
+    /*!
+     * \copydoc owns_lock()
+     */
     explicit operator bool() const noexcept
     { return owns_lock(); }
 
