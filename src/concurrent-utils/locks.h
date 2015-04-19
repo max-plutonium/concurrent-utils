@@ -32,8 +32,8 @@
 
 namespace concurrent_utils {
 
-/*!
- * \internal
+/**
+ * @internal
  */
 template <typename Tp> class is_lockable
 {
@@ -49,18 +49,140 @@ public:
     enum { value = check<Tp>(nullptr, nullptr) };
 };
 
+/**
+ * @brief Spin-lock implementation
+ */
+class spinlock
+{
+    std::atomic_flag _flag = ATOMIC_FLAG_INIT;
+    std::atomic_uint _sleep_dur;
+
+    using duration_type = std::chrono::microseconds;
+
+    void _sleep() const noexcept {
+        if(_sleep_dur) {
+            try {
+                std::this_thread::sleep_for(duration_type(_sleep_dur));
+            } catch (...) { }
+        } else {
+            std::uint_fast32_t i = 1000;
+            while(--i) { }
+        }
+    }
+
+public:
+    /**
+     * @brief Create spin-lock
+     *
+     * @param duration_usecs Duration in microseconds of waiting
+     * until lock has been released
+     */
+    explicit spinlock(unsigned int duration_usecs = 0) noexcept
+        : _sleep_dur(duration_usecs) { }
+
+    /**
+     * @brief Destroy spin-lock
+     */
+    ~spinlock() noexcept;
+
+#ifndef DOXYGEN
+    spinlock(const spinlock&) = delete;
+    spinlock &operator=(const spinlock&) = delete;
+    spinlock(spinlock&&) = delete;
+    spinlock &operator=(spinlock&&) = delete;
+#endif
+
+    /**
+     * @brief Acquire the lock
+     */
+    void lock() noexcept {
+        while(_flag.test_and_set(std::memory_order_acquire))
+            _sleep();
+    }
+
+    /**
+     * @brief Release the lock
+     */
+    void unlock() noexcept {
+        _flag.clear(std::memory_order_release);
+    }
+
+    /**
+     * @brief Tries to acquire the lock @a n times
+     * @return true, if lock was acquired
+     */
+    bool try_lock(unsigned n = 1) noexcept
+    {
+        while(_flag.test_and_set(std::memory_order_acquire)) {
+            if(!--n) return false;
+            _sleep();
+        }
+        return true;
+    }
+
+    /**
+     * @brief Tries to acquire the lock until @a atime
+     * @return true, if lock was acquired
+     */
+  template <class Clock, class Duration>
+    inline bool
+    try_lock_until(const std::chrono::time_point<Clock, Duration> &atime)
+    {
+        while(!try_lock()) {
+            if(std::chrono::system_clock::now() >= atime)
+                return false;
+            _sleep();
+        }
+        return true;
+    }
+
+    /**
+     * @brief Tries to acquire the lock for @a rtime
+     * @return true, if lock was acquired
+     */
+  template <class Rep, class Period>
+    inline bool
+    try_lock_for(const std::chrono::duration<Rep, Period>& rtime) {
+        return try_lock_until(std::chrono::system_clock::now() + rtime);
+    }
+
+    /**
+     * @return Waiting time on locked spin-lock
+     */
+    unsigned get_sleep_dur() const noexcept { return _sleep_dur; }
+
+    /**
+     * @brief Sets a waiting duration according to @a usecs
+     */
+    void set_sleep_dur(unsigned usecs) noexcept { _sleep_dur = usecs; }
+
+    /**
+     * @brief Sets a waiting duration according to @a rtime
+     */
+  template <class Rep, class Period>
+    inline void
+    set_sleep_dur(const std::chrono::duration<Rep, Period> &rtime) {
+        set_sleep_dur(std::chrono::duration_cast<duration_type>(rtime).count());
+    }
+
+    /**
+     * @brief Reset a waiting duration
+     */
+    inline void reset_sleep_dur() noexcept { set_sleep_dur(0); }
+};
+
 
 /**
  * @brief Class for ordered locks acquisition
  *
- * Some algorithms need to acquire just two locks that can
+ * Some algorithms need for acquire just two locks. That can
  * lead to a hang when two or more threads wait for each other.
  * ordered_lock acquires locks sequentially according to their
  * addresses, ie when called from different threads will
  * still acquire the lock in same manner.
  *
  * Common application - in copy or move constructors
- * in the classes containing the lock.
+ * in classes containing the lock.
  */
 template <typename Lockable1, typename Lockable2>
 class ordered_lock
@@ -79,67 +201,67 @@ class ordered_lock
         , locked(is_locked) { }
 
 public:
-    /*!
-     * \brief Конструирует пустой объект
+    /**
+     * @brief Creates empty object
      */
     constexpr ordered_lock() noexcept
         : locks(nullptr, nullptr), locked(false) { }
 
-    /*!
-     * \brief Конструирует объект и захватывает блокировки
+    /**
+     * @brief Creates and acquires locks
      */
     ordered_lock(Lockable1 &l1, Lockable2 &l2)
         : ordered_lock(l1, l2, false) { lock(); }
 
-    /*!
-     * \brief Конструирует объект без захвата блокировок
+    /**
+     * @brief Creates object without locking
      *
-     * Необходим для того, чтобы захватить блокировки позже.
+     * Necessary for deferred locks acquisition.
      *
-     * \sa lock()
+     * @sa lock()
      */
     ordered_lock(Lockable1 &l1, Lockable2 &l2, std::defer_lock_t)
         noexcept : ordered_lock(l1, l2, false) { }
 
-    /*!
-     * \brief Конструирует объект без захвата блокировок
+    /**
+     * @brief Creates object without locking
      *
-     * Необходим для того, чтобы сконструировать объект из
-     * уже захваченных блокировок.
+     * Necessary in order to construct an object from
+     * already acquired locks.
      *
-     * \sa unlock()
+     * @sa unlock()
      */
     ordered_lock(Lockable1 &l1, Lockable2 &l2, std::adopt_lock_t)
         noexcept : ordered_lock(l1, l2, true) { }
 
-    /*!
-     * \brief Освобождает блокировки, если они были захвачены
+    /**
+     * @brief Releases locks if they are locked
      */
-    ~ordered_lock()
-    {
+    ~ordered_lock() {
         if(locked)
             unlock();
     }
 
+    // Disallow copying
     ordered_lock(const ordered_lock&) = delete;
     ordered_lock &operator=(const ordered_lock&) = delete;
 
-    /*!
-     * \brief Конструирует объект из другого объекта перемещением
+    /**
+     * @brief Move constructor
      */
     ordered_lock(ordered_lock &&other) noexcept
         : ordered_lock() { swap(other); }
 
-    /*!
-     * \brief Присваивает себе блокировки из \a other
+    /**
+     * @brief Assigns all locks from @a other
      */
     ordered_lock &operator=(ordered_lock &&other) noexcept {
         ordered_lock(std::move(other)).swap(*this);
         return *this;
     }
 
-    /*!
-     * \brief Захватывает блокировки
+    /**
+     * @brief Acquires all locks
      */
     void lock()
     {
@@ -155,13 +277,10 @@ public:
             throw system_error(make_error_code(
                     errc::resource_deadlock_would_occur));
         else if(static_cast<void *>(locks.first)
-           < static_cast<void *>(locks.second))
-        {
+           < static_cast<void *>(locks.second)) {
             locks.first->lock();
             locks.second->lock();
-        }
-        else
-        {
+        } else {
             locks.second->lock();
             locks.first->lock();
         }
@@ -169,8 +288,8 @@ public:
         locked = true;
     }
 
-    /*!
-     * \brief Освобождает блокировки
+    /**
+     * @brief Releases all locks
      */
     void unlock()
     {
@@ -186,13 +305,10 @@ public:
             throw system_error(make_error_code(
                     errc::operation_not_permitted));
         else if(static_cast<void*>(locks.first)
-           < static_cast<void*>(locks.second))
-        {
+           < static_cast<void*>(locks.second)) {
             locks.first->unlock();
             locks.second->unlock();
-        }
-        else
-        {
+        } else {
             locks.second->unlock();
             locks.first->unlock();
         }
@@ -200,38 +316,32 @@ public:
         locked = false;
     }
 
-    /*!
-     * \brief Отдает блокировки без освобождения
+    /**
+     * @brief Get stored locks without releasing
      *
-     * \return Пару из хранящихся адресов блокировок.
+     * @return Pair of lock's addresses.
      */
-    std::pair<Lockable1 *, Lockable2 *> release() noexcept
-    {
+    std::pair<Lockable1 *, Lockable2 *> release() noexcept {
         std::pair<Lockable1*, Lockable2*> ret;
         std::swap(ret, locks);
         return ret;
     }
 
-    /*!
-     * \brief Обменивает блокировки с \a other
+    /**
+     * @brief Swaps locks with @a other
      */
-    void swap(ordered_lock &other) noexcept
-    {
+    void swap(ordered_lock &other) noexcept {
         std::swap(locks, other.locks);
         std::swap(locked, other.locked);
     }
 
-    /*!
-     * \brief Возвращает true, если блокировки захвачены
+    /**
+     * @return true, if all locks are acquired
      */
-    bool owns_lock() const noexcept
-    { return locked; }
+    bool owns_lock() const noexcept { return locked; }
 
-    /*!
-     * \copydoc owns_lock()
-     */
-    explicit operator bool() const noexcept
-    { return owns_lock(); }
+    /// @copydoc owns_lock()
+    explicit operator bool() const noexcept { return owns_lock(); }
 
 }; // class ordered_lock
 
