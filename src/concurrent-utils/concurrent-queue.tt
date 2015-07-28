@@ -208,14 +208,14 @@ namespace concurrent_utils {
     concurrent_queue<Tp, Lock, Alloc>::
     _wait(std::unique_lock<Lock> &lk)
     {
-        _cond.wait(lk, [this]() { return !_base::_empty() || _closed; });
+        _cond.wait(lk, [this]() { return _closed || !_base::_empty(); });
         return _closed;
     }
 
 /**
  * @internal
  * @brief Waits for items to appear in the queue until @a atime
- * @return true, if the queue is not empty or it has been closed.
+ * @return true, if the queue is closed.
  */
   template <typename Tp, typename Lock, typename Alloc>
       template<typename Clock, typename Duration>
@@ -224,14 +224,15 @@ namespace concurrent_utils {
     _wait(std::unique_lock<Lock> &lk,
           const std::chrono::time_point<Clock, Duration> &atime)
     {
-        return _cond.wait_until(lk, atime,
-            [this]() { return !_base::_empty() || _closed; });
+        _cond.wait_until(lk, atime, [this]() {
+            return _closed || !_base::_empty(); });
+        return _closed;
     }
 
 /**
  * @internal
  * @brief Waits for items to appear in the queue within @a rtime
- * @return true, if the queue is not empty or it has been closed.
+ * @return true, if the queue is closed.
  */
   template <typename Tp, typename Lock, typename Alloc>
       template <typename Rep, typename Period>
@@ -240,8 +241,9 @@ namespace concurrent_utils {
     _wait(std::unique_lock<Lock> &lk,
           const std::chrono::duration<Rep, Period> &rtime)
     {
-        return _cond.wait_for(lk, rtime,
-            [this]() { return !_base::_empty() || _closed; });
+        _cond.wait_for(lk, rtime, [this]() {
+            return _closed || !_base::_empty(); });
+        return _closed;
     }
 
 /**
@@ -437,7 +439,7 @@ namespace concurrent_utils {
  * @brief Waits for items to appear in the queue,
  * then takes first item and forwards it by reference @a val,
  * if the queue is not closed
- * @return false, if the queue has been closed, true otherwise.
+ * @return false, if the queue is empty or closed, true otherwise.
  * @snippet concurrent-queue.cc wait_pull
  */
   template <typename Tp, typename Lock, typename Alloc>
@@ -465,7 +467,7 @@ namespace concurrent_utils {
  * @brief Waits for items to appear in the queue until @a atime,
  * then takes first item and forwards it by reference @a val,
  * if the queue is not closed
- * @return false, if the queue has been closed, true otherwise.
+ * @return false, if the queue is empty or closed, true otherwise.
  * @snippet concurrent-queue.cc wait_pull
  */
   template <typename Tp, typename Lock, typename Alloc>
@@ -479,7 +481,7 @@ namespace concurrent_utils {
 
         {
             std::unique_lock<Lock> lk(_lock);
-            if(_wait(lk, atime) && _closed) return false; // if closed
+            if(_wait(lk, atime)) return false; // if closed
             node = _base::_unhook_next();
         }
 
@@ -495,7 +497,7 @@ namespace concurrent_utils {
  * @brief Waits for items to appear in the queue within @a rtime,
  * then takes first item and forwards it by reference @a val,
  * if the queue is not closed
- * @return false, if the queue has been closed, true otherwise.
+ * @return false, if the queue is empty or closed, true otherwise.
  * @snippet concurrent-queue.cc wait_pull
  */
   template <typename Tp, typename Lock, typename Alloc>
@@ -509,7 +511,7 @@ namespace concurrent_utils {
 
         {
             std::unique_lock<Lock> lk(_lock);
-            if(_wait(lk, rtime) && _closed) return false; // if closed
+            if(_wait(lk, rtime)) return false; // if closed
             node = _base::_unhook_next();
         }
 
