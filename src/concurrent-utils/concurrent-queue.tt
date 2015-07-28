@@ -43,14 +43,16 @@ namespace concurrent_utils {
     {
         using traits = std::allocator_traits<node_alloc_type>;
         node_alloc_type &alloc = _get_node_allocator();
-        scoped_node_ptr node { traits::allocate(alloc, 1), *this };
-        traits::construct(alloc, node.get(), std::forward<Args>(args)...);
+        auto guarded_ptr = std::__allocate_guarded(alloc);
+        traits::construct(alloc, guarded_ptr.get(), std::forward<Args>(args)...);
+        scoped_node_ptr node { guarded_ptr.get(), *this };
+        guarded_ptr = nullptr;
         return node;
     }
 
 /**
  * @internal
- * @brief Puts the given node @a p to end of queue
+ * @brief Puts the given node @a p to end of the queue
  */
   template <typename Tp, typename Alloc>
     void
@@ -128,7 +130,7 @@ namespace concurrent_utils {
             temp._hook(node_ptr.release());
         }
 
-        // we can unlock other
+        // we can unlock other now
         std::unique_lock<Lock> locker2 { _lock, std::adopt_lock };
         locker.release();
         other._lock.unlock();
@@ -197,10 +199,57 @@ namespace concurrent_utils {
     }
 
 /**
+ * @internal
+ * @brief Waits for items to appear in the queue
+ * @return true, if the queue has been closed.
+ */
+  template <typename Tp, typename Lock, typename Alloc>
+    bool
+    concurrent_queue<Tp, Lock, Alloc>::
+    _wait(std::unique_lock<Lock> &lk)
+    {
+        _cond.wait(lk, [this]() { return !_base::_empty() || _closed; });
+        return _closed;
+    }
+
+/**
+ * @internal
+ * @brief Waits for items to appear in the queue until @a atime
+ * @return true, if the queue is not empty or it has been closed.
+ */
+  template <typename Tp, typename Lock, typename Alloc>
+      template<typename Clock, typename Duration>
+    bool
+    concurrent_queue<Tp, Lock, Alloc>::
+    _wait(std::unique_lock<Lock> &lk,
+          const std::chrono::time_point<Clock, Duration> &atime)
+    {
+        return _cond.wait_until(lk, atime,
+            [this]() { return !_base::_empty() || _closed; });
+    }
+
+/**
+ * @internal
+ * @brief Waits for items to appear in the queue within @a rtime
+ * @return true, if the queue is not empty or it has been closed.
+ */
+  template <typename Tp, typename Lock, typename Alloc>
+      template <typename Rep, typename Period>
+    bool
+    concurrent_queue<Tp, Lock, Alloc>::
+    _wait(std::unique_lock<Lock> &lk,
+          const std::chrono::duration<Rep, Period> &rtime)
+    {
+        return _cond.wait_for(lk, rtime,
+            [this]() { return !_base::_empty() || _closed; });
+    }
+
+/**
  * Initializes all fields
  */
   template <typename Tp, typename Lock, typename Alloc>
-    concurrent_queue<Tp, Lock, Alloc>::concurrent_queue() noexcept
+    concurrent_queue<Tp, Lock, Alloc>::
+    concurrent_queue() noexcept
     {
     }
 
@@ -208,8 +257,10 @@ namespace concurrent_utils {
  * Blocks and clears the queue
  */
   template <typename Tp, typename Lock, typename Alloc>
-    concurrent_queue<Tp, Lock, Alloc>::~concurrent_queue() noexcept
+    concurrent_queue<Tp, Lock, Alloc>::
+    ~concurrent_queue()
     {
+        close();
         _lock.lock();
         _base::_clear();
     }
@@ -292,7 +343,19 @@ namespace concurrent_utils {
     }
 
 /**
- * @brief Exchange contents with @a other
+ * @brief Closes the queue
+ */
+  template <typename Tp, typename Lock, typename Alloc>
+    void
+    concurrent_queue<Tp, Lock, Alloc>::close()
+    {
+        std::lock_guard<Lock> lk(_lock);
+        _closed = true;
+        _cond.notify_all();
+    }
+
+/**
+ * @brief Exchanges contents with @a other
  */
   template <typename Tp, typename Lock, typename Alloc>
       template <typename Lock2>
@@ -306,7 +369,7 @@ namespace concurrent_utils {
     }
 
 /**
- * @brief Exchange contents with @a other
+ * @brief Exchanges contents with @a other
  * @note Without blocking.
  */
   template <typename Tp, typename Lock, typename Alloc>
@@ -319,23 +382,27 @@ namespace concurrent_utils {
     }
 
 /**
- * @brief Creates an item from given arguments and puts it to the queue
- * @return true, if successful.
- * @snippet concurrent-queue.cc enqueue
+ * @brief Creates an item from given arguments and puts it
+ * to the queue, if it is not closed
+ * @return true, if the queue is not closed.
+ * @snippet concurrent-queue.cc push
  */
   template <typename Tp, typename Lock, typename Alloc>
       template<typename... Args>
     bool
-    concurrent_queue<Tp, Lock, Alloc>::enqueue(Args &&...args)
+    concurrent_queue<Tp, Lock, Alloc>::
+    push(Args &&...args)
     {
         static_assert(std::is_constructible<value_type, Args...>::value,
                       "template argument substituting Tp"
             " must be constructible from given arguments");
 
         typename _base::scoped_node_ptr node
-                = _base::_create_node(nullptr, std::forward<Args>(args)...);
+            = _base::_create_node(nullptr, std::forward<Args>(args)...);
 
         std::lock_guard<Lock> lk(_lock);
+        if(_closed) return false;
+        if(_base::_empty()) _cond.notify_one();
         _base::_hook(node.release());
         return true;
     }
@@ -344,11 +411,12 @@ namespace concurrent_utils {
  * @brief Takes the next item from the queue and forwards
  * it by reference @a val if the queue is not empty
  * @return false, if the queue is already empty; true otherwise.
- * @snippet concurrent-queue.cc dequeue
+ * @snippet concurrent-queue.cc pull
  */
   template <typename Tp, typename Lock, typename Alloc>
     bool
-    concurrent_queue<Tp, Lock, Alloc>::dequeue(value_type &val)
+    concurrent_queue<Tp, Lock, Alloc>::
+    pull(value_type &val)
     {
         typename _base::scoped_node_ptr node { nullptr, *this };
 
@@ -366,22 +434,114 @@ namespace concurrent_utils {
     }
 
 /**
+ * @brief Waits for items to appear in the queue,
+ * then takes first item and forwards it by reference @a val,
+ * if the queue is not closed
+ * @return false, if the queue has been closed, true otherwise.
+ * @snippet concurrent-queue.cc wait_pull
+ */
+  template <typename Tp, typename Lock, typename Alloc>
+    bool
+    concurrent_queue<Tp, Lock, Alloc>::
+    wait_pull(value_type &val)
+    {
+        typename _base::scoped_node_ptr node { nullptr, *this };
+
+        {
+            std::unique_lock<Lock> lk(_lock);
+            if(_wait(lk)) return false; // if closed
+            node = _base::_unhook_next();
+        }
+
+        if(node) {
+            val = std::move_if_noexcept(node->t);
+            return true;
+        }
+
+        return false;
+    }
+
+/**
+ * @brief Waits for items to appear in the queue until @a atime,
+ * then takes first item and forwards it by reference @a val,
+ * if the queue is not closed
+ * @return false, if the queue has been closed, true otherwise.
+ * @snippet concurrent-queue.cc wait_pull
+ */
+  template <typename Tp, typename Lock, typename Alloc>
+      template <typename Clock, typename Duration>
+    bool
+    concurrent_queue<Tp, Lock, Alloc>::
+    wait_pull(const std::chrono::time_point<Clock, Duration> &atime,
+              value_type &val)
+    {
+        typename _base::scoped_node_ptr node { nullptr, *this };
+
+        {
+            std::unique_lock<Lock> lk(_lock);
+            if(_wait(lk, atime) && _closed) return false; // if closed
+            node = _base::_unhook_next();
+        }
+
+        if(node) {
+            val = std::move_if_noexcept(node->t);
+            return true;
+        }
+
+        return false;
+    }
+
+/**
+ * @brief Waits for items to appear in the queue within @a rtime,
+ * then takes first item and forwards it by reference @a val,
+ * if the queue is not closed
+ * @return false, if the queue has been closed, true otherwise.
+ * @snippet concurrent-queue.cc wait_pull
+ */
+  template <typename Tp, typename Lock, typename Alloc>
+      template <typename Rep, typename Period>
+    bool
+    concurrent_queue<Tp, Lock, Alloc>::
+    wait_pull(const std::chrono::duration<Rep, Period> &rtime,
+              value_type &val)
+    {
+        typename _base::scoped_node_ptr node { nullptr, *this };
+
+        {
+            std::unique_lock<Lock> lk(_lock);
+            if(_wait(lk, rtime) && _closed) return false; // if closed
+            node = _base::_unhook_next();
+        }
+
+        if(node) {
+            val = std::move_if_noexcept(node->t);
+            return true;
+        }
+
+        return false;
+    }
+
+/**
  * @brief Creates an item from given arguments and puts it to the queue
- * without blocking
- * @return true, if successful.
+ * without blocking, if it is not closed
+ * @return true, if the queue is not closed.
  */
   template <typename Tp, typename Lock, typename Alloc>
       template<typename... Args>
     bool
-    concurrent_queue<Tp, Lock, Alloc>::enqueue_unsafe(Args &&...args)
+    concurrent_queue<Tp, Lock, Alloc>::
+    push_unsafe(Args &&...args)
     {
         static_assert(std::is_constructible<value_type, Args...>::value,
                       "template argument substituting Tp"
             " must be constructible from given arguments");
 
+        if(_closed) return false;
+        const bool need_notify = _base::_empty();
         typename _base::scoped_node_ptr node
-                = _base::_create_node(nullptr, std::forward<Args>(args)...);
+            = _base::_create_node(nullptr, std::forward<Args>(args)...);
         _base::_hook(node.release());
+        if(need_notify) _cond.notify_one();
         return true;
     }
 
@@ -392,7 +552,8 @@ namespace concurrent_utils {
  */
   template <typename Tp, typename Lock, typename Alloc>
     bool
-    concurrent_queue<Tp, Lock, Alloc>::dequeue_unsafe(value_type &val)
+    concurrent_queue<Tp, Lock, Alloc>::
+    pull_unsafe(value_type &val)
     {
         typename _base::scoped_node_ptr node = _base::_unhook_next();
 

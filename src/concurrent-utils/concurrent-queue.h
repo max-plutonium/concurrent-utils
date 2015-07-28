@@ -30,6 +30,7 @@
 
 #include <memory>
 #include <type_traits>
+#include <condition_variable>
 
 #include "locks.h"
 
@@ -46,7 +47,7 @@ namespace details {
             Tp   t;
 
           template <typename... Args>
-            node(node *anext, Args&&... args) : next(anext)
+            node(node *anext, Args &&...args) : next(anext)
               , t(std::forward<Args>(args)...) { }
         };
 
@@ -86,7 +87,7 @@ namespace details {
             traits::deallocate(alloc, ptr, 1);
         }
 
-        using scoped_node_ptr = std::unique_ptr<node, basic_forward_queue<Tp, Alloc>&>;
+        using scoped_node_ptr = std::unique_ptr<node, basic_forward_queue<Tp, Alloc> &>;
 
         queue_impl _impl;
 
@@ -104,6 +105,7 @@ namespace details {
         inline void  _hook(node*) noexcept;
         inline scoped_node_ptr _unhook_next() noexcept;
         void _clear();
+        inline bool _empty() const noexcept { return !_impl.last; }
 
     }; // struct basic_forward_queue
 
@@ -123,8 +125,13 @@ class concurrent_queue : protected details::basic_forward_queue<Tp, Alloc>
 #endif
 
     using _base = details::basic_forward_queue<Tp, Alloc>;
+    using _cond_type = typename std::conditional<
+        std::is_same<Lock, std::mutex>::value,
+        std::condition_variable, std::condition_variable_any>::type;
 
     mutable Lock _lock;
+    _cond_type _cond;
+    bool _closed = false;
 
     // To allow construction and assignment from any incompatible types
   template <typename Tp2, typename Lock2, typename Alloc2>
@@ -137,6 +144,16 @@ class concurrent_queue : protected details::basic_forward_queue<Tp, Alloc>
   template <typename Tp2, typename Lock2, typename Alloc2>
     void _append(concurrent_queue<Tp2, Lock2, Alloc2> const&);
 
+    bool _wait(std::unique_lock<Lock> &lk);
+
+  template<typename Clock, typename Duration>
+    bool _wait(std::unique_lock<Lock> &lk,
+        const std::chrono::time_point<Clock, Duration> &atime);
+
+  template <typename Rep, typename Period>
+    bool _wait(std::unique_lock<Lock> &lk,
+        const std::chrono::duration<Rep, Period> &rtime);
+
 public:
     using allocator_type = Alloc;
     using value_type = Tp;
@@ -147,7 +164,7 @@ public:
     { return allocator_type(_base::_get_node_allocator()); }
 
     concurrent_queue() noexcept;
-    ~concurrent_queue() noexcept;
+    ~concurrent_queue();
 
     concurrent_queue(concurrent_queue const&);
     concurrent_queue &operator=(concurrent_queue const&);
@@ -191,52 +208,53 @@ public:
 #ifndef DOXYGEN
     // Moving from another types is prohibited
   template <typename Tp2, typename Lock2, typename Alloc2>
-    concurrent_queue(concurrent_queue<Tp2, Lock2, Alloc2>&&) = delete;
+    concurrent_queue(concurrent_queue<Tp2, Lock2, Alloc2> &&) = delete;
   template <typename Tp2, typename Lock2, typename Alloc2>
-    concurrent_queue &operator=(concurrent_queue<Tp2, Lock2, Alloc2>&&) = delete;
+    concurrent_queue &operator=(concurrent_queue<Tp2, Lock2, Alloc2> &&) = delete;
 #endif
 
     /// Returns true, if queue's size equals zero
-    inline bool empty() const noexcept
-    { std::lock_guard<Lock> lk(_lock); return !_base::_impl.last; }
+    inline bool empty() const
+    { std::lock_guard<Lock> lk(_lock); return _base::_empty(); }
+
+    /// Returns true, if queue closed
+    inline bool closed() const
+    { std::lock_guard<Lock> lk(_lock); return _closed; }
 
     /// Clears queue's contents
     inline void clear() noexcept
     { concurrent_queue<Tp, Lock, Alloc>().swap(*this); }
 
-  template <typename Lock2>
-    void swap(concurrent_queue<Tp, Lock2, Alloc>&) noexcept;
+    void close();
+
+    /// Returns reference to a internal queue's lock
+    inline Lock &underlying_lock() const noexcept { return _lock; }
 
   template <typename Lock2>
-    void swap_unsafe(concurrent_queue<Tp, Lock2, Alloc>&) noexcept;
+    void swap(concurrent_queue<Tp, Lock2, Alloc> &) noexcept;
+
+  template <typename Lock2>
+    void swap_unsafe(concurrent_queue<Tp, Lock2, Alloc> &) noexcept;
 
   template <typename... Args>
-    inline bool enqueue(Args&&... args);
+    bool push(Args &&...args);
 
-    inline bool dequeue(value_type &val);
+    bool pull(value_type &val);
 
-    /// @copydoc enqueue
+    bool wait_pull(value_type &val);
+
+  template <typename Clock, typename Duration>
+    bool wait_pull(const std::chrono::time_point<Clock, Duration> &atime,
+                   value_type &val);
+
+  template <typename Rep, typename Period>
+    bool wait_pull(const std::chrono::duration<Rep, Period> &rtime,
+                   value_type &val);
+
   template <typename... Args>
-    inline bool push(Args&&... args)
-    { return enqueue(std::forward<Args>(args)...); }
+    bool push_unsafe(Args &&...args);
 
-    /// @copydoc dequeue
-    inline bool pop(value_type &val)
-    { return dequeue(val); }
-
-  template <typename... Args>
-    inline bool enqueue_unsafe(Args&&... args);
-
-    inline bool dequeue_unsafe(value_type &val);
-
-    /// @copydoc enqueue_unsafe
-  template <typename... Args>
-    inline bool push_unsafe(Args&&... args)
-    { return enqueue_unsafe(std::forward<Args>(args)...); }
-
-    /// @copydoc dequeue_unsafe
-    inline bool pop_unsafe(value_type &val)
-    { return dequeue_unsafe(val); }
+    bool pull_unsafe(value_type &val);
 
   template <typename Tpa, typename Locka, typename Alloca>
     friend class concurrent_queue;

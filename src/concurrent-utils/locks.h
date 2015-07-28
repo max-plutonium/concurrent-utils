@@ -28,7 +28,9 @@
 #ifndef CONCURRENT_UTILS_LOCKS_H
 #define CONCURRENT_UTILS_LOCKS_H
 
+#include <atomic>
 #include <mutex>
+#include <thread>
 
 namespace concurrent_utils {
 
@@ -73,7 +75,6 @@ class spinlock
 public:
     /**
      * @brief Create spin-lock
-     *
      * @param duration_usecs Duration in microseconds of waiting
      * until lock has been released
      */
@@ -124,7 +125,7 @@ public:
      * @brief Tries to acquire the lock until @a atime
      * @return true, if lock was acquired
      */
-  template <class Clock, class Duration>
+  template <typename Clock, typename Duration>
     inline bool
     try_lock_until(const std::chrono::time_point<Clock, Duration> &atime)
     {
@@ -140,7 +141,7 @@ public:
      * @brief Tries to acquire the lock for @a rtime
      * @return true, if lock was acquired
      */
-  template <class Rep, class Period>
+  template <typename Rep, typename Period>
     inline bool
     try_lock_for(const std::chrono::duration<Rep, Period>& rtime) {
         return try_lock_until(std::chrono::system_clock::now() + rtime);
@@ -159,7 +160,7 @@ public:
     /**
      * @brief Sets a waiting duration according to @a rtime
      */
-  template <class Rep, class Period>
+  template <typename Rep, typename Period>
     inline void
     set_sleep_dur(const std::chrono::duration<Rep, Period> &rtime) {
         set_sleep_dur(std::chrono::duration_cast<duration_type>(rtime).count());
