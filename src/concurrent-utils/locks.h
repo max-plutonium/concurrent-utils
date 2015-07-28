@@ -143,7 +143,7 @@ public:
      */
   template <typename Rep, typename Period>
     inline bool
-    try_lock_for(const std::chrono::duration<Rep, Period>& rtime) {
+    try_lock_for(const std::chrono::duration<Rep, Period> &rtime) {
         return try_lock_until(std::chrono::system_clock::now() + rtime);
     }
 
