@@ -319,7 +319,6 @@ public:
 
     /**
      * @brief Get stored locks without releasing
-     *
      * @return Pair of lock's addresses.
      */
     std::pair<Lockable1 *, Lockable2 *> release() noexcept {

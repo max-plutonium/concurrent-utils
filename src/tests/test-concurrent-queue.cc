@@ -319,7 +319,7 @@ TEST(ConcurrentQueue, CopyCtors)
 
     for(double d = 1.0; d < num_tests + 1; ++d)
     {
-        float ret_float = -99.0;
+        float ret_float = -99.0f;
         unsigned ret_unsigned = 99;
 
         ASSERT_TRUE(q_float_dummy.pull_unsafe(ret_float));
