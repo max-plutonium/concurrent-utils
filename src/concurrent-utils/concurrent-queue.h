@@ -263,6 +263,6 @@ public:
 
 } // namespace concurrent_utils
 
-#include "concurrent-queue.tt"
+#include "concurrent-queue.tcc"
 
 #endif // CONCURRENT_UTILS_CONCURRENT_QUEUE_H
