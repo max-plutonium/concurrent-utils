@@ -33,7 +33,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} \
 
 set(HEADERS
     concurrent-queue.h
-    concurrent-queue.tt
+    concurrent-queue.tcc
     locks.h
 )
 
