@@ -84,7 +84,7 @@ public:
     /**
      * @brief Destroy spin-lock
      */
-    ~spinlock() noexcept;
+    ~spinlock() noexcept = default;
 
 #ifndef DOXYGEN
     spinlock(const spinlock&) = delete;
