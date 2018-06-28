@@ -404,8 +404,8 @@ namespace concurrent_utils {
 
         std::lock_guard<Lock> lk(_lock);
         if(_closed) return false;
-        if(_base::_empty()) _cond.notify_one();
         _base::_hook(node.release());
+        _cond.notify_one();
         return true;
     }
 
@@ -539,11 +539,10 @@ namespace concurrent_utils {
             " must be constructible from given arguments");
 
         if(_closed) return false;
-        const bool need_notify = _base::_empty();
         typename _base::scoped_node_ptr node
             = _base::_create_node(nullptr, std::forward<Args>(args)...);
         _base::_hook(node.release());
-        if(need_notify) _cond.notify_one();
+        _cond.notify_one();
         return true;
     }
 
